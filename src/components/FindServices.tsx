@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Filter, Calendar, Star, Phone, Mail, MessageCircle } from 'lucide-react';
+import { Search, MapPin, Filter, Calendar, Star, Phone, Mail, MessageCircle, AlertCircle } from 'lucide-react';
 import { ServiceProvider } from '../types';
 import { useServiceProviders } from '../hooks/useServiceProviders';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
@@ -14,8 +14,8 @@ export function FindServices() {
   const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
   const [bookingProvider, setBookingProvider] = useState<ServiceProvider | null>(null);
   
-  const { providers, findNearbyProviders } = useServiceProviders();
-  const { geocodeAddress } = useGoogleMaps();
+  const { providers, loading: providersLoading } = useServiceProviders();
+  const { geocodeAddress, isLoaded: mapsLoaded } = useGoogleMaps();
 
   const services = [
     'Plumbing', 'Electrical Work', 'Carpentry', 'Painting', 'Gardening',
@@ -24,10 +24,23 @@ export function FindServices() {
     'Mechanic', 'Tailoring'
   ];
 
+  // Debug logging
+  useEffect(() => {
+    console.log('FindServices - Providers:', providers.length);
+    console.log('FindServices - Loading:', providersLoading);
+    console.log('FindServices - Maps loaded:', mapsLoaded);
+  }, [providers, providersLoading, mapsLoaded]);
+
   const handleLocationSearch = async (location: string) => {
+    if (!mapsLoaded) {
+      console.warn('Google Maps not loaded yet');
+      return;
+    }
+    
     const coords = await geocodeAddress(location);
     if (coords) {
       setUserLocation(coords);
+      console.log('User location set:', coords);
     }
   };
 
@@ -42,8 +55,28 @@ export function FindServices() {
   });
 
   const nearbyProviders = userLocation 
-    ? findNearbyProviders(userLocation, 15) 
+    ? filteredProviders.filter(provider => {
+        if (!provider.coordinates) return true;
+        const distance = calculateDistance(userLocation, provider.coordinates);
+        return distance <= 15; // 15km radius
+      })
     : filteredProviders;
+
+  // Show loading state
+  if (providersLoading) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 text-lg">Loading service providers...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -53,6 +86,7 @@ export function FindServices() {
           <div>
             <h2 className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">Find Services</h2>
             <p className="text-gray-600 mt-2 text-lg">Discover local service providers on TAC Market Place</p>
+            <p className="text-sm text-gray-500 mt-1">{providers.length} service providers available</p>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -63,9 +97,11 @@ export function FindServices() {
                   ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-lg' 
                   : 'bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-600'
               }`}
+              disabled={!mapsLoaded}
             >
               <MapPin className="w-5 h-5" />
               <span>{showMap ? 'Hide Map' : 'Show Map'}</span>
+              {!mapsLoaded && <span className="text-xs">(Loading...)</span>}
             </button>
           </div>
         </div>
@@ -108,13 +144,26 @@ export function FindServices() {
                 }
               }}
               className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+              disabled={!mapsLoaded}
             />
           </div>
         </div>
+
+        {/* Maps API Status */}
+        {!mapsLoaded && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+              <p className="text-yellow-800 text-sm">
+                Google Maps is loading... Location search and map view will be available shortly.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Map View */}
-      {showMap && (
+      {showMap && mapsLoaded && (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <MapView 
             providers={nearbyProviders}
@@ -213,13 +262,18 @@ export function FindServices() {
         ))}
       </div>
 
-      {nearbyProviders.length === 0 && (
+      {nearbyProviders.length === 0 && !providersLoading && (
         <div className="text-center py-16">
           <div className="w-20 h-20 bg-gradient-to-r from-teal-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Search className="w-10 h-10 text-teal-500" />
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-3">No services found</h3>
           <p className="text-gray-600">Try adjusting your search criteria or location</p>
+          {providers.length === 0 && (
+            <p className="text-sm text-gray-500 mt-2">
+              No service providers are currently available. Please check back later.
+            </p>
+          )}
         </div>
       )}
 
@@ -233,4 +287,20 @@ export function FindServices() {
       )}
     </div>
   );
+}
+
+// Helper function to calculate distance
+function calculateDistance(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number }
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (destination.lat - origin.lat) * Math.PI / 180;
+  const dLon = (destination.lng - origin.lng) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(origin.lat * Math.PI / 180) * Math.cos(destination.lat * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }

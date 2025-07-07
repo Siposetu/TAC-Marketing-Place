@@ -9,7 +9,8 @@ export function useGoogleMaps() {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     
     if (!apiKey) {
-      setLoadError('Google Maps API key not found');
+      console.warn('Google Maps API key not found. Maps functionality will be disabled.');
+      setLoadError('Google Maps API key not configured');
       return;
     }
 
@@ -21,27 +22,34 @@ export function useGoogleMaps() {
 
     loader.load()
       .then(() => {
+        console.log('Google Maps loaded successfully');
         setIsLoaded(true);
       })
       .catch((error) => {
-        setLoadError('Failed to load Google Maps');
         console.error('Google Maps loading error:', error);
+        setLoadError('Failed to load Google Maps');
       });
   }, []);
 
   const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
-    if (!isLoaded || !window.google) return null;
+    if (!isLoaded || !window.google) {
+      console.warn('Google Maps not loaded, cannot geocode address');
+      return null;
+    }
 
     return new Promise((resolve) => {
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address }, (results, status) => {
         if (status === 'OK' && results && results[0]) {
           const location = results[0].geometry.location;
-          resolve({
+          const coords = {
             lat: location.lat(),
             lng: location.lng()
-          });
+          };
+          console.log('Geocoded address:', address, 'to:', coords);
+          resolve(coords);
         } else {
+          console.warn('Geocoding failed for address:', address, 'Status:', status);
           resolve(null);
         }
       });
@@ -52,9 +60,11 @@ export function useGoogleMaps() {
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number }
   ): number => {
-    if (!isLoaded || !window.google) return 0;
+    if (!isLoaded || !window.google) {
+      console.warn('Google Maps not loaded, cannot calculate distance');
+      return 0;
+    }
 
-    const service = new window.google.maps.DistanceMatrixService();
     const originLatLng = new window.google.maps.LatLng(origin.lat, origin.lng);
     const destLatLng = new window.google.maps.LatLng(destination.lat, destination.lng);
     
