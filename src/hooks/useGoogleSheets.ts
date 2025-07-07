@@ -67,7 +67,9 @@ export function useGoogleSheets() {
     // Check if user is already signed in
     const authInstance = window.gapi.auth2.getAuthInstance();
     if (authInstance) {
-      setIsSignedIn(authInstance.isSignedIn.get());
+      const isCurrentlySignedIn = authInstance.isSignedIn.get();
+      setIsSignedIn(isCurrentlySignedIn);
+      console.log('Google Sheets auth status:', isCurrentlySignedIn);
     }
   };
 
@@ -88,6 +90,7 @@ export function useGoogleSheets() {
           prompt: 'consent'
         });
         setIsSignedIn(true);
+        console.log('Successfully signed in to Google Sheets');
       }
     } catch (error: any) {
       console.error('Sign-in error:', error);
@@ -114,23 +117,38 @@ export function useGoogleSheets() {
   const ensureAuthenticated = async () => {
     try {
       if (!isGoogleSheetsConfigured()) {
-        throw new Error('Google Sheets integration is not configured');
+        console.log('Google Sheets not configured, skipping authentication');
+        return false;
       }
 
       await initializeGoogleSheetsAPI();
       const authInstance = window.gapi.auth2.getAuthInstance();
       
       if (!authInstance.isSignedIn.get()) {
-        await signIn();
+        console.log('Not signed in, attempting silent sign-in...');
+        try {
+          await authInstance.signIn({ prompt: 'none' });
+          setIsSignedIn(true);
+          console.log('Silent sign-in successful');
+        } catch (silentError) {
+          console.log('Silent sign-in failed, user interaction required');
+          return false;
+        }
       }
+      return true;
     } catch (error) {
-      throw error;
+      console.warn('Authentication failed:', error);
+      return false;
     }
   };
 
   const ensureSheetExists = async (sheetName: string, headers: string[]) => {
     try {
-      await ensureAuthenticated();
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping sheet creation');
+        return false;
+      }
       
       // Check if sheet exists
       const response = await window.gapi.client.sheets.spreadsheets.get({
@@ -141,6 +159,7 @@ export function useGoogleSheets() {
       const sheetExists = sheets.some((sheet: any) => sheet.properties.title === sheetName);
 
       if (!sheetExists) {
+        console.log(`Creating sheet: ${sheetName}`);
         // Create the sheet
         await window.gapi.client.sheets.spreadsheets.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
@@ -190,10 +209,12 @@ export function useGoogleSheets() {
             }]
           }
         });
+        console.log(`Sheet ${sheetName} created successfully`);
       }
+      return true;
     } catch (error) {
       console.error('Error ensuring sheet exists:', error);
-      throw error;
+      return false;
     }
   };
 
@@ -203,7 +224,13 @@ export function useGoogleSheets() {
       setLoading(true);
       
       if (!isGoogleSheetsConfigured()) {
-        setError('Google Sheets integration is not configured. Please check your environment variables.');
+        console.log('Google Sheets not configured, skipping setup');
+        return false;
+      }
+      
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping sheet setup');
         return false;
       }
       
@@ -242,6 +269,7 @@ export function useGoogleSheets() {
       ];
       await ensureSheetExists(ANALYTICS_SHEET_NAME, analyticsHeaders);
 
+      console.log('All sheets setup completed successfully');
       return true;
     } catch (error: any) {
       console.error('Error setting up sheets:', error);
@@ -252,91 +280,16 @@ export function useGoogleSheets() {
     }
   };
 
-  const syncLocalProfileToSheets = async (profile: LocalProfile): Promise<boolean> => {
-    setLoading(true);
-    setError(null);
-
+  const syncServiceProviderToSheets = async (provider: ServiceProvider): Promise<boolean> => {
     try {
       if (!isGoogleSheetsConfigured()) {
-        console.log('Google Sheets not configured, skipping sync');
+        console.log('Google Sheets not configured, skipping sync for provider:', provider.fullName);
         return false;
       }
 
-      const headers = [
-        'ID', 'Full Name', 'Skill', 'Years Experience', 'Location', 
-        'Contact', 'Availability', 'Status', 'Bio (AI)', 'Suggested Price (ZAR)', 
-        'Created At', 'Profile Image', 'Portfolio Images Count', 'Customer Reviews Count'
-      ];
-
-      await ensureSheetExists(LOCAL_SHEET_NAME, headers);
-
-      const values = [
-        profile.id,
-        profile.fullName,
-        profile.skill,
-        profile.yearsExperience.toString(),
-        profile.location,
-        profile.contact,
-        profile.availability,
-        profile.status,
-        profile.bioAI || '',
-        profile.suggestedPriceZAR.toString(),
-        profile.createdAt.toISOString(),
-        profile.profileImage ? 'Yes' : 'No',
-        (profile.portfolioImages?.length || 0).toString(),
-        (profile.customerReviews?.length || 0).toString()
-      ];
-
-      // Check if profile already exists
-      const existingData = await window.gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `'${LOCAL_SHEET_NAME}'!A:A`,
-      });
-
-      const existingIds = existingData.result.values?.slice(1).map((row: any) => row[0]) || [];
-      const existingIndex = existingIds.indexOf(profile.id);
-
-      if (existingIndex >= 0) {
-        // Update existing row
-        const rowNumber = existingIndex + 2; // +1 for header, +1 for 0-based index
-        await window.gapi.client.sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `'${LOCAL_SHEET_NAME}'!A${rowNumber}:${String.fromCharCode(64 + headers.length)}${rowNumber}`,
-          valueInputOption: 'RAW',
-          resource: {
-            values: [values]
-          }
-        });
-      } else {
-        // Append new row
-        await window.gapi.client.sheets.spreadsheets.values.append({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `'${LOCAL_SHEET_NAME}'!A:${String.fromCharCode(64 + headers.length)}`,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          resource: {
-            values: [values]
-          }
-        });
-      }
-
-      return true;
-    } catch (err: any) {
-      console.error('Google Sheets sync error:', err);
-      setError('Google Sheets sync failed. Your data is saved locally.');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const syncServiceProviderToSheets = async (provider: ServiceProvider): Promise<boolean> => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (!isGoogleSheetsConfigured()) {
-        console.log('Google Sheets not configured, skipping sync');
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping sync for provider:', provider.fullName);
         return false;
       }
 
@@ -348,7 +301,11 @@ export function useGoogleSheets() {
         'Coordinates (Lng)', 'Profile Images Count', 'Customer Reviews Count'
       ];
 
-      await ensureSheetExists(PROVIDERS_SHEET_NAME, headers);
+      const sheetExists = await ensureSheetExists(PROVIDERS_SHEET_NAME, headers);
+      if (!sheetExists) {
+        console.log('Failed to ensure sheet exists, skipping sync');
+        return false;
+      }
 
       const values = [
         provider.id,
@@ -394,6 +351,7 @@ export function useGoogleSheets() {
             values: [values]
           }
         });
+        console.log(`Updated provider ${provider.fullName} in Google Sheets`);
       } else {
         // Append new row
         await window.gapi.client.sheets.spreadsheets.values.append({
@@ -405,25 +363,110 @@ export function useGoogleSheets() {
             values: [values]
           }
         });
+        console.log(`Added provider ${provider.fullName} to Google Sheets`);
       }
 
       return true;
     } catch (err: any) {
-      console.error('Google Sheets sync error:', err);
-      setError('Google Sheets sync failed. Your data is saved locally.');
+      console.error('Google Sheets sync error for provider:', provider.fullName, err);
       return false;
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const syncLocalProfileToSheets = async (profile: LocalProfile): Promise<boolean> => {
+    try {
+      if (!isGoogleSheetsConfigured()) {
+        console.log('Google Sheets not configured, skipping sync for profile:', profile.fullName);
+        return false;
+      }
+
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping sync for profile:', profile.fullName);
+        return false;
+      }
+
+      const headers = [
+        'ID', 'Full Name', 'Skill', 'Years Experience', 'Location', 
+        'Contact', 'Availability', 'Status', 'Bio (AI)', 'Suggested Price (ZAR)', 
+        'Created At', 'Profile Image', 'Portfolio Images Count', 'Customer Reviews Count'
+      ];
+
+      const sheetExists = await ensureSheetExists(LOCAL_SHEET_NAME, headers);
+      if (!sheetExists) {
+        console.log('Failed to ensure sheet exists, skipping sync');
+        return false;
+      }
+
+      const values = [
+        profile.id,
+        profile.fullName,
+        profile.skill,
+        profile.yearsExperience.toString(),
+        profile.location,
+        profile.contact,
+        profile.availability,
+        profile.status,
+        profile.bioAI || '',
+        profile.suggestedPriceZAR.toString(),
+        profile.createdAt.toISOString(),
+        profile.profileImage ? 'Yes' : 'No',
+        (profile.portfolioImages?.length || 0).toString(),
+        (profile.customerReviews?.length || 0).toString()
+      ];
+
+      // Check if profile already exists
+      const existingData = await window.gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `'${LOCAL_SHEET_NAME}'!A:A`,
+      });
+
+      const existingIds = existingData.result.values?.slice(1).map((row: any) => row[0]) || [];
+      const existingIndex = existingIds.indexOf(profile.id);
+
+      if (existingIndex >= 0) {
+        // Update existing row
+        const rowNumber = existingIndex + 2;
+        await window.gapi.client.sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `'${LOCAL_SHEET_NAME}'!A${rowNumber}:${String.fromCharCode(64 + headers.length)}${rowNumber}`,
+          valueInputOption: 'RAW',
+          resource: {
+            values: [values]
+          }
+        });
+        console.log(`Updated profile ${profile.fullName} in Google Sheets`);
+      } else {
+        // Append new row
+        await window.gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `'${LOCAL_SHEET_NAME}'!A:${String.fromCharCode(64 + headers.length)}`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: {
+            values: [values]
+          }
+        });
+        console.log(`Added profile ${profile.fullName} to Google Sheets`);
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('Google Sheets sync error for profile:', profile.fullName, err);
+      return false;
     }
   };
 
   const syncAppointmentToSheets = async (appointment: any): Promise<boolean> => {
-    setLoading(true);
-    setError(null);
-
     try {
       if (!isGoogleSheetsConfigured()) {
-        console.log('Google Sheets not configured, skipping sync');
+        console.log('Google Sheets not configured, skipping appointment sync');
+        return false;
+      }
+
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping appointment sync');
         return false;
       }
 
@@ -433,7 +476,11 @@ export function useGoogleSheets() {
         'Status', 'Notes', 'Created At', 'Updated At'
       ];
 
-      await ensureSheetExists(APPOINTMENTS_SHEET_NAME, headers);
+      const sheetExists = await ensureSheetExists(APPOINTMENTS_SHEET_NAME, headers);
+      if (!sheetExists) {
+        console.log('Failed to ensure appointments sheet exists');
+        return false;
+      }
 
       const values = [
         appointment.id,
@@ -463,23 +510,24 @@ export function useGoogleSheets() {
         }
       });
 
+      console.log('Appointment synced to Google Sheets');
       return true;
     } catch (err: any) {
-      console.error('Google Sheets sync error:', err);
-      setError('Google Sheets sync failed. Appointment saved locally.');
+      console.error('Google Sheets appointment sync error:', err);
       return false;
-    } finally {
-      setLoading(false);
     }
   };
 
   const updateAnalytics = async (analyticsData: any): Promise<boolean> => {
-    setLoading(true);
-    setError(null);
-
     try {
       if (!isGoogleSheetsConfigured()) {
         console.log('Google Sheets not configured, skipping analytics sync');
+        return false;
+      }
+
+      const authenticated = await ensureAuthenticated();
+      if (!authenticated) {
+        console.log('Not authenticated, skipping analytics sync');
         return false;
       }
 
@@ -490,7 +538,11 @@ export function useGoogleSheets() {
         'Completed Appointments', 'Top Service', 'Top Location', 'Average Price'
       ];
 
-      await ensureSheetExists(ANALYTICS_SHEET_NAME, headers);
+      const sheetExists = await ensureSheetExists(ANALYTICS_SHEET_NAME, headers);
+      if (!sheetExists) {
+        console.log('Failed to ensure analytics sheet exists');
+        return false;
+      }
 
       const values = [
         new Date().toISOString().split('T')[0],
@@ -520,61 +572,31 @@ export function useGoogleSheets() {
         }
       });
 
+      console.log('Analytics synced to Google Sheets');
       return true;
     } catch (err: any) {
       console.error('Google Sheets analytics sync error:', err);
-      setError('Google Sheets analytics sync failed.');
       return false;
-    } finally {
-      setLoading(false);
     }
   };
 
   const batchSyncLocalProfiles = async (profiles: LocalProfile[]): Promise<number> => {
-    setLoading(true);
-    setError(null);
     let successCount = 0;
 
-    try {
-      if (!isGoogleSheetsConfigured()) {
-        console.log('Google Sheets not configured, skipping batch sync');
-        return 0;
-      }
-
-      for (const profile of profiles) {
-        const success = await syncLocalProfileToSheets(profile);
-        if (success) successCount++;
-      }
-    } catch (err: any) {
-      console.error('Batch sync error:', err);
-      setError('Google Sheets batch sync failed. Data saved locally.');
-    } finally {
-      setLoading(false);
+    for (const profile of profiles) {
+      const success = await syncLocalProfileToSheets(profile);
+      if (success) successCount++;
     }
 
     return successCount;
   };
 
   const batchSyncServiceProviders = async (providers: ServiceProvider[]): Promise<number> => {
-    setLoading(true);
-    setError(null);
     let successCount = 0;
 
-    try {
-      if (!isGoogleSheetsConfigured()) {
-        console.log('Google Sheets not configured, skipping batch sync');
-        return 0;
-      }
-
-      for (const provider of providers) {
-        const success = await syncServiceProviderToSheets(provider);
-        if (success) successCount++;
-      }
-    } catch (err: any) {
-      console.error('Batch sync error:', err);
-      setError('Google Sheets batch sync failed. Data saved locally.');
-    } finally {
-      setLoading(false);
+    for (const provider of providers) {
+      const success = await syncServiceProviderToSheets(provider);
+      if (success) successCount++;
     }
 
     return successCount;
