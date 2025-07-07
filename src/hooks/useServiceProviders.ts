@@ -11,20 +11,34 @@ export function useServiceProviders() {
   const { syncServiceProviderToSheets } = useGoogleSheets();
 
   useEffect(() => {
-    // Load initial data from localStorage
+    // Load initial data from localStorage or use mock data
     const savedProviders = localStorage.getItem('serviceProviders');
     if (savedProviders) {
-      const parsedProviders = JSON.parse(savedProviders).map((p: any) => ({
-        ...p,
-        createdAt: new Date(p.createdAt)
-      }));
-      setProviders(parsedProviders);
+      try {
+        const parsedProviders = JSON.parse(savedProviders).map((p: any) => ({
+          ...p,
+          createdAt: new Date(p.createdAt)
+        }));
+        setProviders(parsedProviders);
+      } catch (error) {
+        console.error('Error parsing saved providers:', error);
+        // Fallback to mock data if parsing fails
+        initializeMockData();
+      }
     } else {
       // Initialize with mock data if no saved data exists
-      setProviders(mockServiceProviders);
-      localStorage.setItem('serviceProviders', JSON.stringify(mockServiceProviders));
+      initializeMockData();
     }
   }, []);
+
+  const initializeMockData = () => {
+    const mockData = mockServiceProviders.map(provider => ({
+      ...provider,
+      createdAt: new Date(provider.createdAt)
+    }));
+    setProviders(mockData);
+    localStorage.setItem('serviceProviders', JSON.stringify(mockData));
+  };
 
   const saveProviders = (newProviders: ServiceProvider[]) => {
     setProviders(newProviders);
@@ -36,7 +50,11 @@ export function useServiceProviders() {
     saveProviders(newProviders);
     
     // Sync to Google Sheets
-    await syncServiceProviderToSheets(provider);
+    try {
+      await syncServiceProviderToSheets(provider);
+    } catch (error) {
+      console.warn('Google Sheets sync failed:', error);
+    }
   };
 
   const updateProvider = async (id: string, updates: Partial<ServiceProvider>) => {
@@ -44,7 +62,9 @@ export function useServiceProviders() {
       if (p.id === id) {
         const updatedProvider = { ...p, ...updates };
         // Sync to Google Sheets when provider is updated
-        syncServiceProviderToSheets(updatedProvider).catch(console.error);
+        syncServiceProviderToSheets(updatedProvider).catch(error => {
+          console.warn('Google Sheets sync failed for update:', error);
+        });
         return updatedProvider;
       }
       return p;
@@ -60,41 +80,49 @@ export function useServiceProviders() {
   const generateProfile = async (formData: FormData): Promise<ServiceProvider> => {
     setLoading(true);
     
-    // Simulate AI generation delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Get coordinates for the location
-    const coordinates = await geocodeAddress(formData.location);
-    
-    const generatedBio = generateBio(formData);
-    const suggestedPrice = generatePrice(formData);
-    
-    const newProvider: ServiceProvider = {
-      id: Date.now().toString(),
-      fullName: formData.fullName,
-      service: formData.service,
-      yearsExperience: formData.yearsExperience,
-      location: formData.location,
-      coordinates,
-      contactDetails: formData.contactDetails,
-      generatedBio,
-      suggestedPrice,
-      status: 'Ready',
-      createdAt: new Date(),
-      isBusinessOwner: formData.isBusinessOwner,
-      businessInfo: formData.businessInfo,
-      availability: generateDefaultAvailability()
-    };
-    
-    await addProvider(newProvider);
-    setLoading(false);
-    
-    return newProvider;
+    try {
+      // Simulate AI generation delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get coordinates for the location
+      const coordinates = await geocodeAddress(formData.location);
+      
+      const generatedBio = generateBio(formData);
+      const suggestedPrice = generatePrice(formData);
+      
+      const newProvider: ServiceProvider = {
+        id: Date.now().toString(),
+        fullName: formData.fullName,
+        service: formData.service,
+        yearsExperience: formData.yearsExperience,
+        location: formData.location,
+        coordinates,
+        contactDetails: formData.contactDetails,
+        generatedBio,
+        suggestedPrice,
+        status: 'Ready',
+        createdAt: new Date(),
+        isBusinessOwner: formData.isBusinessOwner,
+        businessInfo: formData.businessInfo,
+        availability: generateDefaultAvailability(),
+        profileImages: formData.profileImages,
+        customerReviews: formData.customerReviews,
+        customAvailability: formData.customAvailability
+      };
+      
+      await addProvider(newProvider);
+      return newProvider;
+    } catch (error) {
+      console.error('Error generating profile:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const findNearbyProviders = (userLocation: { lat: number; lng: number }, radiusKm: number = 10) => {
+  const findNearbyProviders = (userLocation: { lat: number; lng: number }, radiusKm: number = 15) => {
     return providers.filter(provider => {
-      if (!provider.coordinates) return false;
+      if (!provider.coordinates) return true; // Include providers without coordinates
       
       const distance = calculateDistance(userLocation, provider.coordinates);
       return distance <= radiusKm;

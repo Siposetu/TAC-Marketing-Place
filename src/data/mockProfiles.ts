@@ -14,7 +14,7 @@ export const mockServiceProviders = [
     generatedBio: 'Thabo is a skilled plumber with 8 years of experience serving clients in Khayelitsha and surrounding areas. Known for delivering high-quality work and exceptional customer service, specializing in residential and commercial plumbing solutions.',
     suggestedPrice: 350,
     status: 'Published' as const,
-    createdAt: new Date('2024-01-15'),
+    createdAt: '2024-01-15T00:00:00.000Z',
     isBusinessOwner: false,
     availability: [
       { date: '2024-12-20', startTime: '08:00', endTime: '12:00', available: true },
@@ -39,7 +39,7 @@ export const mockServiceProviders = [
     generatedBio: 'Nomsa brings 12 years of professional hair styling experience to every client. Based in Gugulethu, she specializes in natural hair care, braids, weaves, and modern styling techniques. Known for her creativity and attention to detail.',
     suggestedPrice: 180,
     status: 'Published' as const,
-    createdAt: new Date('2024-02-10'),
+    createdAt: '2024-02-10T00:00:00.000Z',
     isBusinessOwner: true,
     businessInfo: {
       businessName: 'Nomsa\'s Hair Studio',
@@ -79,7 +79,7 @@ export const mockServiceProviders = [
     generatedBio: 'Ahmed is a certified electrician with 15 years of experience in residential and commercial electrical work. Based in Mitchell\'s Plain, he provides reliable electrical services including installations, repairs, and safety inspections.',
     suggestedPrice: 400,
     status: 'Published' as const,
-    createdAt: new Date('2024-01-20'),
+    createdAt: '2024-01-20T00:00:00.000Z',
     isBusinessOwner: true,
     businessInfo: {
       businessName: 'Hassan Electrical Services',
@@ -117,7 +117,7 @@ export const mockServiceProviders = [
     generatedBio: 'Sipho is a dedicated mathematics and science tutor with 6 years of experience helping students excel in their studies. Based in Langa, he specializes in high school mathematics, physical science, and exam preparation.',
     suggestedPrice: 200,
     status: 'Published' as const,
-    createdAt: new Date('2024-03-05'),
+    createdAt: '2024-03-05T00:00:00.000Z',
     isBusinessOwner: false,
     availability: [
       { date: '2024-12-20', startTime: '15:00', endTime: '18:00', available: true },
@@ -140,7 +140,7 @@ export const mockServiceProviders = [
     generatedBio: 'Fatima specializes in traditional Cape Malay cuisine and modern catering services with 10 years of experience. Based in Athlone, she provides catering for weddings, corporate events, and special occasions with authentic flavors.',
     suggestedPrice: 280,
     status: 'Published' as const,
-    createdAt: new Date('2024-02-28'),
+    createdAt: '2024-02-28T00:00:00.000Z',
     isBusinessOwner: true,
     businessInfo: {
       businessName: 'Fatima\'s Cape Malay Kitchen',
@@ -177,7 +177,7 @@ export const mockServiceProviders = [
     generatedBio: 'Mandla is a passionate gardener with 7 years of experience in landscape design and garden maintenance. Based in Nyanga, he specializes in indigenous plants, vegetable gardens, and sustainable gardening practices.',
     suggestedPrice: 160,
     status: 'Published' as const,
-    createdAt: new Date('2024-01-30'),
+    createdAt: '2024-01-30T00:00:00.000Z',
     isBusinessOwner: false,
     availability: [
       { date: '2024-12-20', startTime: '06:00', endTime: '10:00', available: true },
@@ -201,7 +201,7 @@ export const mockServiceProviders = [
     generatedBio: 'Priya is a professional photographer with 9 years of experience capturing life\'s precious moments. Based in Wynberg, she specializes in weddings, portraits, and event photography with a creative and artistic approach.',
     suggestedPrice: 450,
     status: 'Published' as const,
-    createdAt: new Date('2024-02-15'),
+    createdAt: '2024-02-15T00:00:00.000Z',
     isBusinessOwner: true,
     businessInfo: {
       businessName: 'Priya Photography Studio',
@@ -238,7 +238,7 @@ export const mockServiceProviders = [
     generatedBio: 'Lungile provides professional cleaning services with 5 years of experience in residential and office cleaning. Based in Philippi, she is known for her attention to detail and reliable service.',
     suggestedPrice: 140,
     status: 'Published' as const,
-    createdAt: new Date('2024-03-10'),
+    createdAt: '2024-03-10T00:00:00.000Z',
     isBusinessOwner: false,
     availability: [
       { date: '2024-12-20', startTime: '08:00', endTime: '12:00', available: true },
